@@ -1,0 +1,28 @@
+loki.source.windowsevent "application" {
+  eventlog_name          = "Application"
+  use_incoming_timestamp = true
+  forward_to             = [loki.process.windows.receiver]
+}
+
+loki.source.windowsevent "system" {
+  eventlog_name          = "System"
+  use_incoming_timestamp = true
+  forward_to             = [loki.process.windows.receiver]
+}
+
+loki.process "windows" {
+  stage.static_labels {
+    values = {
+      environment = "lab",
+      source      = "windows_eventlog",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://192.0.2.20:3100/loki/api/v1/push"
+  }
+}
