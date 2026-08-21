@@ -131,9 +131,70 @@ Grafana Alloy was then installed with the Windows installer. The installer compl
 
 The lab intentionally records the tested Alloy version instead of claiming parity with another environment.
 
+## Windows Event Log ingestion validation
+
+The Windows Alloy configuration was reduced to two broadly available channels:
+
+- `System`
+- `Application`
+
+The configuration used persistent bookmark files, a three-second poll interval, incoming event timestamps and low-cardinality labels including `host`, `environment`, `job`, `source`, `channel` and `service`.
+
+A controlled Application event was created with source `ObservabilityLab`, Event ID `100`, and message:
+
+```text
+OBS-LAB-E2E Windows Event Log to Alloy to Loki
+```
+
+Loki exposed both Windows streams through the series API. Observed labels included:
+
+```text
+job="windows-eventlog"
+environment="lab"
+channel="Application"
+channel="System"
+```
+
+The controlled event was then retrieved directly from Loki using LogQL:
+
+```logql
+{job="windows-eventlog", channel="Application"} |= "OBS-LAB-E2E"
+```
+
+The query returned exactly one matching entry. The returned event payload contained:
+
+```text
+source: ObservabilityLab
+event_id: 100
+message: OBS-LAB-E2E Windows Event Log to Alloy to Loki
+```
+
+This validates the following chain independently of the Grafana UI:
+
+```text
+Windows Event Log
+  -> Grafana Alloy 1.18.1
+  -> Loki 3.7.0
+  -> LogQL query result
+```
+
+### Label-case finding
+
+An earlier query used:
+
+```logql
+{job="windows-eventlog", channel="application"}
+```
+
+and returned no result. Ingested streams exposed the canonical Event Log channel value as `Application`. Label values are case-sensitive, so the corrected query succeeded.
+
+The repository LogQL examples were updated to reflect the observed labels rather than assuming lower-case channel values.
+
 ## Validation goal
 
-The lab will only be marked PASS when the following chain is demonstrated end-to-end:
+The lab is considered fully end-to-end only after the same controlled evidence is confirmed through the provisioned Grafana Loki datasource.
+
+Target chain:
 
 ```text
 Windows Event Log
@@ -142,8 +203,6 @@ Windows Event Log
   -> Grafana / LogQL
 ```
 
-A controlled Windows event must be generated and retrieved from Loki through the documented workflow before the repository claims full reproducibility.
-
 ## Current status
 
 ```text
@@ -151,7 +210,10 @@ PASS: clean Ubuntu baseline and Docker runtime
 PASS: Loki 3.7.0 + Grafana 11.5.2 backend from Compose
 PASS: Loki datasource provisioned automatically in Grafana
 PASS: clean Windows Server 2022 Alloy 1.18.1 installation
+PASS: System and Application streams ingested into Loki
+PASS: controlled Windows Application event retrieved through LogQL
 CONFIRMED FINDING: Loki image cannot use the attempted CMD-SHELL healthcheck
 CONFIRMED FINDING: Alloy installer may still be finalizing immediately after silent invocation
-IN PROGRESS: Windows Event Log ingestion and LogQL retrieval
+CONFIRMED FINDING: Event Log channel labels are case-sensitive in LogQL
+IN PROGRESS: final Grafana datasource/UI retrieval check
 ```
