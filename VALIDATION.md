@@ -49,19 +49,65 @@ This means the original repository described the intended architecture but was *
 
 That gap is being treated as a validation finding rather than silently assumed away.
 
-## Loki startup and healthcheck finding
+## Loki and Grafana backend validation
 
-A first local Loki 3.7.0 container test showed that Loki itself starts correctly, but a shell-based Docker healthcheck is invalid for the tested image.
+A minimal backend was created with pinned images:
 
-Observed behavior:
+- `grafana/loki:3.7.0`
+- `grafana/grafana:11.5.2`
 
-- Loki reached `Loki started` in the container logs.
-- The host could reach `http://localhost:3100/ready`.
-- During startup `/ready` temporarily returned HTTP 503 with `Ingester not ready: waiting for 15s after being ready`, which is normal readiness behavior during initialization.
-- Docker nevertheless marked the container unhealthy because the configured `CMD-SHELL` healthcheck attempted to execute `/bin/sh` inside the Loki image.
-- The tested `grafana/loki:3.7.0` image does not provide `/bin/sh`, producing `stat /bin/sh: no such file or directory` on every healthcheck attempt.
+Grafana provisions Loki automatically as its default datasource.
 
-Therefore the lab must not use a shell-based in-container healthcheck for Loki 3.7.0. Readiness will instead be verified through Loki's `/ready` endpoint from the host or another container with an HTTP client, while Compose startup ordering must not depend on the invalid shell healthcheck.
+### Healthcheck finding
+
+The first Compose attempt used a Loki `CMD-SHELL` healthcheck. The Loki 3.7.0 image used in this run does not provide `/bin/sh`, so Docker marked the container unhealthy even though Loki itself had started successfully.
+
+Observed Docker healthcheck error:
+
+```text
+exec: "/bin/sh": stat /bin/sh: no such file or directory
+```
+
+The container logs independently showed:
+
+```text
+Loki started
+```
+
+Loki readiness was therefore moved out of the container healthcheck and validated explicitly through the host HTTP endpoint.
+
+Immediately after startup `/ready` returned HTTP 503 with:
+
+```text
+Ingester not ready: waiting for 15s after being ready
+```
+
+This is expected during Loki startup. In the clean run, readiness became HTTP 200 on the ninth two-second polling attempt.
+
+Final backend state:
+
+```text
+obs-lab-loki      Up
+obs-lab-grafana   Up (healthy)
+```
+
+Loki:
+
+```text
+GET /ready -> HTTP 200
+ready
+```
+
+Grafana:
+
+```json
+{
+  "database": "ok",
+  "version": "11.5.2"
+}
+```
+
+This validates the clean deployment of the server-side observability backend.
 
 ## Validation goal
 
@@ -74,14 +120,14 @@ Windows Event Log
   -> Grafana / LogQL
 ```
 
-A controlled Windows event must be generated and retrieved from Loki through the documented workflow before the repository claims reproducibility.
+A controlled Windows event must be generated and retrieved from Loki through the documented workflow before the repository claims full reproducibility.
 
 ## Current status
 
 ```text
 PASS: clean Ubuntu baseline and Docker runtime
-PASS: Loki 3.7.0 process startup and host-side /ready reachability
-CONFIRMED GAP: original repository has no runnable Loki/Grafana stack
-CONFIRMED FINDING: shell-based Loki healthcheck is incompatible with tested image
-IN PROGRESS: reproducible Loki + Grafana backend and Windows Alloy ingestion
+PASS: Loki 3.7.0 + Grafana 11.5.2 backend from Compose
+PASS: Loki datasource provisioned automatically in Grafana
+CONFIRMED FINDING: Loki image cannot use the attempted CMD-SHELL healthcheck
+IN PROGRESS: Windows Alloy ingestion and LogQL retrieval
 ```
