@@ -109,6 +109,28 @@ Grafana:
 
 This validates the clean deployment of the server-side observability backend.
 
+## Windows Alloy baseline
+
+A clean Windows Server 2022 Standard Evaluation virtual machine was used as the Windows log source.
+
+Observed OS baseline:
+
+- Windows Server 2022 Standard Evaluation
+- Version 10.0.20348
+
+TCP connectivity from the Windows host to the lab backend was validated on ports 3000 and 3100 before installing the agent.
+
+Grafana Alloy was then installed with the Windows installer. The installer completed asynchronously enough that an immediate inspection briefly observed an incomplete file state; after installation settled, the final state was valid:
+
+- Windows service `Alloy`: Running
+- Start type: Automatic
+- Alloy version: 1.18.1
+- Platform: windows/amd64
+- Executable size: 442005208 bytes
+- Default config contained only logging configuration
+
+The lab intentionally records the tested Alloy version instead of claiming parity with another environment.
+
 ## Validation goal
 
 The lab will only be marked PASS when the following chain is demonstrated end-to-end:
@@ -128,6 +150,8 @@ A controlled Windows event must be generated and retrieved from Loki through the
 PASS: clean Ubuntu baseline and Docker runtime
 PASS: Loki 3.7.0 + Grafana 11.5.2 backend from Compose
 PASS: Loki datasource provisioned automatically in Grafana
+PASS: clean Windows Server 2022 Alloy 1.18.1 installation
 CONFIRMED FINDING: Loki image cannot use the attempted CMD-SHELL healthcheck
-IN PROGRESS: Windows Alloy ingestion and LogQL retrieval
+CONFIRMED FINDING: Alloy installer may still be finalizing immediately after silent invocation
+IN PROGRESS: Windows Event Log ingestion and LogQL retrieval
 ```
