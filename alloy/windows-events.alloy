@@ -1,27 +1,50 @@
-loki.source.windowsevent "application" {
-  eventlog_name          = "Application"
-  use_incoming_timestamp = true
-  forward_to             = [loki.process.windows.receiver]
+logging {
+  level  = "info"
+  format = "logfmt"
 }
+
+// Replace 192.0.2.20 with the address of the Loki host in your lab.
+// 192.0.2.0/24 is reserved for documentation examples.
 
 loki.source.windowsevent "system" {
   eventlog_name          = "System"
+  xpath_query            = "*[System[TimeCreated[timediff(@SystemTime) <= 900000]]]"
+  bookmark_path          = "C:/ProgramData/GrafanaLabs/Alloy/data/bookmarks/system.xml"
+  poll_interval          = "3s"
   use_incoming_timestamp = true
-  forward_to             = [loki.process.windows.receiver]
-}
 
-loki.process "windows" {
-  stage.static_labels {
-    values = {
-      environment = "lab",
-      source      = "windows_eventlog",
-    }
+  labels = {
+    host        = sys.env("COMPUTERNAME"),
+    environment = "lab",
+    job         = "windows-eventlog",
+    source      = "windows-eventlog",
+    channel     = "system",
+    service     = "windows",
   }
 
-  forward_to = [loki.write.local.receiver]
+  forward_to = [loki.write.central.receiver]
 }
 
-loki.write "local" {
+loki.source.windowsevent "application" {
+  eventlog_name          = "Application"
+  xpath_query            = "*[System[TimeCreated[timediff(@SystemTime) <= 900000]]]"
+  bookmark_path          = "C:/ProgramData/GrafanaLabs/Alloy/data/bookmarks/application.xml"
+  poll_interval          = "3s"
+  use_incoming_timestamp = true
+
+  labels = {
+    host        = sys.env("COMPUTERNAME"),
+    environment = "lab",
+    job         = "windows-eventlog",
+    source      = "windows-eventlog",
+    channel     = "application",
+    service     = "windows",
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.write "central" {
   endpoint {
     url = "http://192.0.2.20:3100/loki/api/v1/push"
   }
