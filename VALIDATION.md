@@ -2,7 +2,7 @@
 
 ## Clean-lab baseline
 
-Validation is being performed from a clean **Ubuntu Server 24.04.4 LTS** virtual-machine baseline.
+Validation was performed from a clean **Ubuntu Server 24.04.4 LTS** virtual-machine baseline.
 
 Observed baseline:
 
@@ -45,9 +45,9 @@ docs/logql-examples.md
 
 No Docker Compose file, Loki configuration, Grafana provisioning, or executable server-side quick-start was present.
 
-This means the original repository described the intended architecture but was **not reproducible from a clean Linux host as documented**.
+This meant the original repository described the intended architecture but was **not reproducible from a clean Linux host as documented**.
 
-That gap is being treated as a validation finding rather than silently assumed away.
+That gap was treated as a validation finding rather than silently assumed away.
 
 ## Loki and Grafana backend validation
 
@@ -107,7 +107,7 @@ Grafana:
 }
 ```
 
-This validates the clean deployment of the server-side observability backend.
+This validated the clean deployment of the server-side observability backend.
 
 ## Windows Alloy baseline
 
@@ -169,7 +169,7 @@ event_id: 100
 message: OBS-LAB-E2E Windows Event Log to Alloy to Loki
 ```
 
-This validates the following chain independently of the Grafana UI:
+This validated the following chain independently of the Grafana UI:
 
 ```text
 Windows Event Log
@@ -190,20 +190,39 @@ and returned no result. Ingested streams exposed the canonical Event Log channel
 
 The repository LogQL examples were updated to reflect the observed labels rather than assuming lower-case channel values.
 
-## Validation goal
+## Grafana end-to-end validation
 
-The lab is considered fully end-to-end only after the same controlled evidence is confirmed through the provisioned Grafana Loki datasource.
+The same controlled event was queried through the provisioned Loki datasource in **Grafana Explore** using:
 
-Target chain:
-
-```text
-Windows Event Log
-  -> Grafana Alloy
-  -> Loki
-  -> Grafana / LogQL
+```logql
+{job="windows-eventlog", channel="Application"} |= "OBS-LAB-E2E"
 ```
 
-## Current status
+Grafana returned one log entry and displayed the expected event payload, including:
+
+```text
+source: ObservabilityLab
+event_id: 100
+message: OBS-LAB-E2E Windows Event Log to Alloy to Loki
+```
+
+The Grafana result also exposed the expected labels for the Windows source, including the Application channel, lab environment, Windows event-log job and host identity.
+
+This completed the end-to-end validation through the visualization/query layer.
+
+## Final validated chain
+
+```text
+Windows Server 2022
+  -> Windows Event Log (Application/System)
+  -> Grafana Alloy 1.18.1
+  -> Loki 3.7.0
+  -> provisioned Grafana Loki datasource
+  -> Grafana 11.5.2 Explore / LogQL
+  -> controlled event retrieved successfully
+```
+
+## Final status
 
 ```text
 PASS: clean Ubuntu baseline and Docker runtime
@@ -211,9 +230,28 @@ PASS: Loki 3.7.0 + Grafana 11.5.2 backend from Compose
 PASS: Loki datasource provisioned automatically in Grafana
 PASS: clean Windows Server 2022 Alloy 1.18.1 installation
 PASS: System and Application streams ingested into Loki
-PASS: controlled Windows Application event retrieved through LogQL
-CONFIRMED FINDING: Loki image cannot use the attempted CMD-SHELL healthcheck
-CONFIRMED FINDING: Alloy installer may still be finalizing immediately after silent invocation
-CONFIRMED FINDING: Event Log channel labels are case-sensitive in LogQL
-IN PROGRESS: final Grafana datasource/UI retrieval check
+PASS: controlled Windows Application event retrieved directly through LogQL
+PASS: same controlled event retrieved through Grafana Explore
+
+END-TO-END STATUS: PASS
 ```
+
+## Confirmed findings
+
+- The tested Loki image cannot use the attempted `CMD-SHELL` healthcheck because `/bin/sh` is absent.
+- Loki can return HTTP 503 from `/ready` briefly during normal ingester startup before becoming ready.
+- The Alloy Windows installer may still be finalizing immediately after silent invocation.
+- Event Log channel label values are case-sensitive in LogQL.
+
+## Revalidation policy
+
+A clean-lab revalidation should be performed after changes affecting:
+
+- Docker Compose service definitions
+- Loki storage/schema configuration
+- Grafana datasource provisioning
+- Alloy Windows Event Log source configuration
+- bookmark handling
+- label naming
+- Loki endpoint configuration
+- documented LogQL queries
